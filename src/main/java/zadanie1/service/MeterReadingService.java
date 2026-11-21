@@ -1,59 +1,52 @@
 package zadanie1.service;
 
-import zadanie1.model.Meter;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.stereotype.Service;
 import zadanie1.model.MeterReading;
 import zadanie1.repository.MeterReadingRepository;
-import zadanie1.repository.MeterRepository;
-import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.NoSuchElementException;
 
 @Service
 public class MeterReadingService {
-    private final MeterReadingRepository readingRepo;
-    private final MeterRepository meterRepo;
+    private final MeterReadingRepository repository;
 
-    public MeterReadingService(MeterReadingRepository readingRepo, MeterRepository meterRepo) {
-        this.readingRepo = readingRepo;
-        this.meterRepo = meterRepo;
+    public MeterReadingService(MeterReadingRepository repository) {
+        this.repository = repository;
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     public List<MeterReading> findAll() {
-        return readingRepo.findAll();
+        return repository.findAll();
     }
 
+    @PreAuthorize("hasRole('ADMIN') or @securityChecks.isReadingOwner(authentication.name, #id)")
     public MeterReading findById(Long id) {
-        return readingRepo.findById(id)
+        return repository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException("MeterReading not found: " + id));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     public MeterReading create(MeterReading r) {
-        if (r.getMeter() == null || r.getMeter().getId() == null) {
-            throw new IllegalArgumentException("Meter is required");
-        }
-        Meter meter = meterRepo.findById(r.getMeter().getId())
-                .orElseThrow(() -> new IllegalArgumentException("Meter not found"));
-        r.setMeter(meter);
         r.setId(null);
-        return readingRepo.save(r);
+        return repository.save(r);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     public MeterReading update(Long id, MeterReading patch) {
-        MeterReading existing = findById(id);
-        if (patch.getMeter() != null && patch.getMeter().getId() != null) {
-            Meter meter = meterRepo.findById(patch.getMeter().getId())
-                    .orElseThrow(() -> new IllegalArgumentException("Meter not found"));
-            existing.setMeter(meter);
-        }
+        MeterReading existing = repository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("MeterReading not found: " + id));
         if (patch.getPeriod() != null) existing.setPeriod(patch.getPeriod());
         if (patch.getValue() != null) existing.setValue(patch.getValue());
         if (patch.getVerificationStatus() != null) existing.setVerificationStatus(patch.getVerificationStatus());
-        return readingRepo.save(existing);
+        return repository.save(existing);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     public void delete(Long id) {
-        findById(id);
-        readingRepo.deleteById(id);
+        repository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("MeterReading not found: " + id));
+        repository.deleteById(id);
     }
 }

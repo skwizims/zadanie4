@@ -1,5 +1,6 @@
 package zadanie1.service;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import zadanie1.model.*;
@@ -24,8 +25,8 @@ public class BusinessService {
         this.userRepo = userRepo;
     }
 
-    // 1. Подать показание счётчика (проверяет, что счётчик активен, и значение больше предыдущего)
     @Transactional
+    @PreAuthorize("hasRole('ADMIN') or @securityChecks.isMeterOwner(authentication.name, #meterId)")
     public MeterReading submitReading(Long meterId, String period, Double value) {
         Meter meter = meterRepo.findById(meterId)
                 .orElseThrow(() -> new NoSuchElementException("Meter not found"));
@@ -34,10 +35,9 @@ public class BusinessService {
             throw new IllegalArgumentException("Cannot submit reading for inactive meter");
         }
 
-        // Проверка, что новое значение больше предыдущего
         readingRepo.findAll().stream()
                 .filter(r -> r.getMeter().getId().equals(meterId))
-                .reduce((first, second) -> second) // берем последнее
+                .reduce((first, second) -> second)
                 .ifPresent(lastReading -> {
                     if (value < lastReading.getValue()) {
                         throw new IllegalArgumentException("New reading cannot be less than previous (" + lastReading.getValue() + ")");
@@ -52,8 +52,8 @@ public class BusinessService {
         return readingRepo.save(reading);
     }
 
-    // 2. Подтвердить показание и сформировать начисление
     @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
     public UtilityCharge approveReadingAndCharge(Long readingId) {
         MeterReading reading = readingRepo.findById(readingId)
                 .orElseThrow(() -> new NoSuchElementException("Reading not found"));
@@ -71,15 +71,14 @@ public class BusinessService {
         charge.setMeter(meter);
         charge.setPeriod(reading.getPeriod());
         charge.setVolume(reading.getValue());
-        // Сумма = объем * тариф
         charge.setAmount(reading.getValue() * meter.getTariff());
         charge.setStatus("UNPAID");
 
         return chargeRepo.save(charge);
     }
 
-    // 3. Оплатить начисление
     @Transactional
+    @PreAuthorize("hasRole('ADMIN') or @securityChecks.isChargeOwner(authentication.name, #chargeId)")
     public UtilityCharge payCharge(Long chargeId) {
         UtilityCharge charge = chargeRepo.findById(chargeId)
                 .orElseThrow(() -> new NoSuchElementException("Charge not found"));
@@ -92,8 +91,8 @@ public class BusinessService {
         return chargeRepo.save(charge);
     }
 
-    // 4. Передать помещение новому владельцу
     @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
     public Premises transferPremises(Long premisesId, Long newOwnerId) {
         Premises premises = premisesRepo.findById(premisesId)
                 .orElseThrow(() -> new NoSuchElementException("Premises not found"));
@@ -107,7 +106,8 @@ public class BusinessService {
         premises.setOwner(newOwner);
         return premisesRepo.save(premises);
     }
-    // 5. Отчёт по потреблению за период (возвращает Map с итогами)
+
+    @PreAuthorize("hasRole('ADMIN')")
     public java.util.Map<String, Object> getConsumptionReport(String period) {
         var allCharges = chargeRepo.findAll().stream()
                 .filter(c -> c.getPeriod().equals(period))

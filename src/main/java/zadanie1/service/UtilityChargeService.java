@@ -1,74 +1,53 @@
 package zadanie1.service;
 
-import zadanie1.model.Meter;
-import zadanie1.model.Premises;
-import zadanie1.model.UtilityCharge;
-import zadanie1.repository.MeterRepository;
-import zadanie1.repository.PremisesRepository;
-import zadanie1.repository.UtilityChargeRepository;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+import zadanie1.model.UtilityCharge;
+import zadanie1.repository.UtilityChargeRepository;
 
 import java.util.List;
 import java.util.NoSuchElementException;
 
 @Service
 public class UtilityChargeService {
-    private final UtilityChargeRepository chargeRepo;
-    private final PremisesRepository premisesRepo;
-    private final MeterRepository meterRepo;
+    private final UtilityChargeRepository repository;
 
-    public UtilityChargeService(UtilityChargeRepository chargeRepo, PremisesRepository premisesRepo, MeterRepository meterRepo) {
-        this.chargeRepo = chargeRepo;
-        this.premisesRepo = premisesRepo;
-        this.meterRepo = meterRepo;
+    public UtilityChargeService(UtilityChargeRepository repository) {
+        this.repository = repository;
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     public List<UtilityCharge> findAll() {
-        return chargeRepo.findAll();
+        return repository.findAll();
     }
 
+    @PreAuthorize("hasRole('ADMIN') or @securityChecks.isChargeOwner(authentication.name, #id)")
     public UtilityCharge findById(Long id) {
-        return chargeRepo.findById(id)
+        return repository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException("UtilityCharge not found: " + id));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     public UtilityCharge create(UtilityCharge c) {
-        if (c.getPremises() == null || c.getPremises().getId() == null) {
-            throw new IllegalArgumentException("Premises is required");
-        }
-        if (c.getMeter() != null && c.getMeter().getId() != null) {
-            Meter meter = meterRepo.findById(c.getMeter().getId())
-                    .orElseThrow(() -> new IllegalArgumentException("Meter not found"));
-            c.setMeter(meter);
-        }
-        Premises premises = premisesRepo.findById(c.getPremises().getId())
-                .orElseThrow(() -> new IllegalArgumentException("Premises not found"));
-        c.setPremises(premises);
         c.setId(null);
-        return chargeRepo.save(c);
+        return repository.save(c);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     public UtilityCharge update(Long id, UtilityCharge patch) {
-        UtilityCharge existing = findById(id);
-        if (patch.getPremises() != null && patch.getPremises().getId() != null) {
-            Premises premises = premisesRepo.findById(patch.getPremises().getId())
-                    .orElseThrow(() -> new IllegalArgumentException("Premises not found"));
-            existing.setPremises(premises);
-        }
-        if (patch.getMeter() != null && patch.getMeter().getId() != null) {
-            Meter meter = meterRepo.findById(patch.getMeter().getId())
-                    .orElseThrow(() -> new IllegalArgumentException("Meter not found"));
-            existing.setMeter(meter);
-        }
+        UtilityCharge existing = repository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("UtilityCharge not found: " + id));
         if (patch.getPeriod() != null) existing.setPeriod(patch.getPeriod());
         if (patch.getVolume() != null) existing.setVolume(patch.getVolume());
         if (patch.getAmount() != null) existing.setAmount(patch.getAmount());
         if (patch.getStatus() != null) existing.setStatus(patch.getStatus());
-        return chargeRepo.save(existing);
+        return repository.save(existing);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     public void delete(Long id) {
-        findById(id);
-        chargeRepo.deleteById(id);
+        repository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("UtilityCharge not found: " + id));
+        repository.deleteById(id);
     }
 }
